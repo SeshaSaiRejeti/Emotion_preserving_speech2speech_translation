@@ -1,0 +1,24 @@
+﻿# Virtual Environments
+Evaluation_metric/
+venv/
+venv_chatterbox/
+venv_exp/
+
+# Secrets
+.env
+KEY.py
+
+# Large Data & Audio
+dataset/
+results/
+evaluation_data/
+evaluation_source/
+*.wav
+*.zip
+
+# System & Cache
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/
+.idea/
