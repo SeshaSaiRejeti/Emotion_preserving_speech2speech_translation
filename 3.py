@@ -43,10 +43,6 @@ from drift_eval import (
     EMOTION_ORDER,
 )
 
-# ================================================================
-# INPUT
-# ================================================================
-
 if len(sys.argv) < 2:
     print("Usage: python 3_full.py <SHORT_ID>")
     sys.exit(1)
@@ -58,7 +54,7 @@ TRANSCRIPT_PATH = BASE_DIR / "transcript.json"
 EMOTION_PATH    = BASE_DIR / "emotion.json"
 METADATA_PATH   = Path("evaluation_data") / "sample_metadata.json"
 
-# Output files
+
 OUT_BASELINE_JSON  = BASE_DIR / "segments_baseline.json"
 OUT_ITERATIVE_JSON = BASE_DIR / "segments_iterative.json"
 OUT_CANDIDATE_JSON = BASE_DIR / "segments_candidate.json"
@@ -68,17 +64,11 @@ OUT_CANDIDATE_TXT  = BASE_DIR / "translated_candidate.txt"
 OUT_COMPARISON     = BASE_DIR / "drift_comparison.json"
 CHECKPOINT_PATH    = BASE_DIR / "3_checkpoint.json"
 
-# ================================================================
-# VALIDATION
-# ================================================================
-
 for p in [TRANSCRIPT_PATH, EMOTION_PATH]:
     if not p.exists():
         raise FileNotFoundError(f"[Phase 3] Missing: {p}")
 
-# ================================================================
-# SKIP CHECK — all outputs must exist and be non-trivial
-# ================================================================
+# all outputs must exist and be non-trivial
 
 def _all_outputs_valid() -> bool:
     required = [
@@ -89,7 +79,7 @@ def _all_outputs_valid() -> bool:
     for path in required:
         if not path.exists() or path.stat().st_size < 10:
             return False
-    # Validate JSON integrity
+    # Validate json integrity
     for path in [OUT_BASELINE_JSON, OUT_ITERATIVE_JSON, OUT_CANDIDATE_JSON, OUT_COMPARISON]:
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -108,10 +98,7 @@ if _all_outputs_valid():
     print(f"[Phase 3] SKIP — all outputs valid ({n} segments). Delete 3_checkpoint.json to re-run.")
     sys.exit(0)
 
-# ================================================================
-# LOAD DATA
-# ================================================================
-
+# loading data
 with open(TRANSCRIPT_PATH, "r", encoding="utf-8") as f:
     transcript = json.load(f)
 
@@ -139,10 +126,7 @@ for t, e in zip(t_segs, e_segs):
 
 print(f"[Phase 3] {len(segments)} segments loaded for {SHORT_ID}")
 
-# ================================================================
-# DETERMINE SOURCE EMOTION LABEL
-# (Gold EmoDB label preferred over SER output for drift measurement)
-# ================================================================
+# what is the source emotion label
 
 gold_emotion: str | None = None
 
@@ -157,17 +141,13 @@ if METADATA_PATH.exists():
         print(f"[Phase 3] WARN: Could not load metadata: {e}")
 
 if gold_emotion is None:
-    # Fallback: use the most common SER label across segments
+    # fallback: use the most common SER label across segments
     from collections import Counter
     label_counts = Counter(s["emotion"] for s in segments)
     gold_emotion = label_counts.most_common(1)[0][0]
     print(f"[Phase 3] WARN: No metadata — using SER majority label: {gold_emotion}")
 
-# ================================================================
-# BUILD SOURCE DISTRIBUTION (ONE-HOT FROM GOLD LABEL)
-# Bootstrap label_order from a dummy call to get j-hartmann's order
-# ================================================================
-
+# build source emotion distribution
 print("[Phase 3] Building source emotion distribution ...")
 _, label_order = get_emotion_dist("I feel happy.")   # dummy English — only for label_order
 source_dist = make_source_dist(gold_emotion, label_order)
@@ -175,11 +155,7 @@ source_dist = make_source_dist(gold_emotion, label_order)
 print(f"[Phase 3] Source dist — dominant: {label_order[int(np.argmax(source_dist))]}")
 print(f"          Vector: {dict(zip(label_order, source_dist.round(3)))}")
 
-RATE_DELAY = 0.8   # seconds between API calls (Groq free tier safe)
-
-# ================================================================
-# CHECKPOINT HELPERS
-# ================================================================
+RATE_DELAY = 0.8   
 
 def save_checkpoint(baseline_rows, iterative_rows, candidate_rows):
     data = {
@@ -203,10 +179,6 @@ def load_checkpoint():
         return b, i, c
     return [], [], []
 
-
-# ================================================================
-# MAIN LOOP
-# ================================================================
 
 baseline_rows, iterative_rows, candidate_rows = load_checkpoint()
 
@@ -237,7 +209,6 @@ if len(baseline_rows) < len(segments):
 else:
     print("[Phase 3] Baseline complete — skipping")
 
-# ---- ITERATIVE ----
 if len(iterative_rows) < len(segments):
     print("\n[Phase 3] === ITERATIVE REGENERATION ===")
     for seg in tqdm(segments, desc="iterative"):
@@ -269,7 +240,6 @@ if len(iterative_rows) < len(segments):
 else:
     print("[Phase 3] Iterative complete — skipping")
 
-# ---- CANDIDATE ----
 if len(candidate_rows) < len(segments):
     print("\n[Phase 3] === CANDIDATE GENERATION ===")
     for seg in tqdm(segments, desc="candidate"):
@@ -302,9 +272,7 @@ if len(candidate_rows) < len(segments):
 else:
     print("[Phase 3] Candidate complete — skipping")
 
-# ================================================================
-# SORT + SAVE
-# ================================================================
+# sort and save
 
 baseline_rows.sort(key=lambda r: r["id"])
 iterative_rows.sort(key=lambda r: r["id"])
@@ -321,7 +289,7 @@ save_json(OUT_BASELINE_JSON,  baseline_rows)
 save_json(OUT_ITERATIVE_JSON, iterative_rows)
 save_json(OUT_CANDIDATE_JSON, candidate_rows)
 
-# ---- TXT files (concatenated translations for XTTS) ----
+# concatenated translation for coqui
 for path, rows in [
     (OUT_BASELINE_TXT,  baseline_rows),
     (OUT_ITERATIVE_TXT, iterative_rows),
@@ -332,10 +300,7 @@ for path, rows in [
         f.write(text)
     print(f"[saved] {path}  ({len(text)} chars)")
 
-# ================================================================
-# AGGREGATE COMPARISON
-# ================================================================
-
+#comparison
 def _agg(rows):
     metrics = [r.get("metrics") for r in rows if r.get("metrics")]
     if not metrics:
@@ -358,9 +323,7 @@ comparison = {
 }
 save_json(OUT_COMPARISON, comparison)
 
-# ================================================================
-# SUMMARY
-# ================================================================
+#summary
 
 print("\n" + "=" * 60)
 print(f"PHASE 3 COMPLETE — {SHORT_ID}  (German → English)")
